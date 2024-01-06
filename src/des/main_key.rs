@@ -1,11 +1,11 @@
-use super::{Error, Result, ShiftSchemes};
+use super::{Error, Result, ShiftDirection, ShiftSchemes};
 use bitvec::prelude::*;
 use std::fmt;
 use std::str::FromStr;
 
 #[derive(Debug, Clone, PartialEq, PartialOrd)]
 pub struct MainKey {
-    pub key: BitVec<u8>,
+    pub key: BitVec<u8>, // FIXME: pub or not?
 }
 
 impl fmt::Display for MainKey {
@@ -58,9 +58,9 @@ impl MainKey {
 
     /// Combines shifting by PC1, round shifting and shifting by PC2
     /// Should be preferred against using 3 functions separately
-    pub fn get_round_key(&self, round: u8) -> Result<Self> {
+    pub fn get_round_key(&self, round: u8, direction: ShiftDirection) -> Result<Self> {
         self.shift_scheme(ShiftSchemes::PC1)
-            .and_then(|key| key.shift_round(round))
+            .and_then(|key| key.shift_round(round, direction))
             .and_then(|key| key.shift_scheme(ShiftSchemes::PC2))
     }
 
@@ -77,14 +77,13 @@ impl MainKey {
         Ok(Self::new(new_key))
     }
 
-    // FIXME: return Self or MainKey?
     /// Returns new round shifted key (doesn't mutate self). Round should be 1..=16
-    pub fn shift_round(&self, round: u8) -> Result<Self> {
+    pub fn shift_round(&self, round: u8, direction: ShiftDirection) -> Result<Self> {
         if !(1..=16).contains(&round) {
             return Err(Error::InvalidRound(round));
         }
 
-        let round_shift = Self::get_round_shift(round)? as usize;
+        let round_shift = direction.get_round_shift(round)? as usize;
         let key = self.key.clone();
         let (left, right) = key.split_at(key.len() / 2);
         let mut left = left.to_owned().to_bitvec();
@@ -93,41 +92,7 @@ impl MainKey {
         left.rotate_left(round_shift);
         right.rotate_left(round_shift);
         left.extend(right);
-        Ok(Self::new(left)) // new or raw constructor?
-    }
 
-    fn get_round_shift(round: u8) -> Result<u8> {
-        let round_shift = round * 2;
-        match round {
-            1 => Ok(round_shift - 1),
-            (2..=8) => Ok(round_shift - 2),
-            (9..=15) => Ok(round_shift - 3),
-            16 => Ok(round_shift - 4),
-            _ => Err(Error::InvalidRound(round)),
-        }
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn test_round_offset() {
-        let mut round = 1;
-        let mut result = MainKey::get_round_shift(round).unwrap();
-        assert_eq!(result, 1);
-
-        round = 2;
-        result = MainKey::get_round_shift(round).unwrap();
-        assert_eq!(result, 2);
-
-        round = 9;
-        result = MainKey::get_round_shift(round).unwrap();
-        assert_eq!(result, 15);
-
-        round = 16;
-        result = MainKey::get_round_shift(round).unwrap();
-        assert_eq!(result, 28);
+        Ok(Self::new(left))
     }
 }

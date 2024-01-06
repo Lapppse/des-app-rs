@@ -1,5 +1,5 @@
 use bitvec::prelude::*;
-use des::{MainKey, Result, ShiftSchemes};
+use des::{MainKey, Result, ShiftDirection, ShiftSchemes};
 use std::str::FromStr;
 
 #[test]
@@ -61,37 +61,40 @@ fn test_to_hex_string() -> Result<()> {
     Ok(())
 }
 
+// FIXME: MainKey as_slice and as_bitvec and len
 #[test]
 fn test_round_shift() -> Result<()> {
     let key = MainKey::from_str("AABB09182736CCDD")
-        .and_then(|key| key.shift_scheme(ShiftSchemes::PC1))
-        .and_then(|key| key.shift_round(1))?; // FIXME: as_slice and as_bitvec
-    let should_be = MainKey::from_str("878067567E19F4")?;
-    assert_eq!(key.to_hex_string(), should_be.to_hex_string());
+        .and_then(|key| key.shift_scheme(ShiftSchemes::PC1))?;
+    let left_shift = key.clone().shift_round(1, ShiftDirection::Left)?;
+    let right_shift = key.clone().shift_round(16, ShiftDirection::Right)?;
+    assert_eq!(left_shift, MainKey::from_str("878067567E19F4")?);
+    assert_eq!(left_shift, right_shift);
 
     let key = MainKey::from_str("AABB09182736CCDD")
-        .and_then(|key| key.shift_scheme(ShiftSchemes::PC1))
-        .and_then(|key| key.shift_round(16))?;
-    let should_be = MainKey::from_str("C3C033A33F0CFA")?;
-    assert_eq!(key.to_hex_string(), should_be.to_hex_string());
+        .and_then(|key| key.shift_scheme(ShiftSchemes::PC1))?;
+    let left_shift = key.clone().shift_round(16, ShiftDirection::Left)?;
+    let right_shift = key.clone().shift_round(1, ShiftDirection::Right)?;
+    assert_eq!(left_shift, MainKey::from_str("C3C033A33F0CFA")?);
+    assert_eq!(left_shift, right_shift);
     Ok(())
 }
 
 #[test]
 fn test_pc1_shift() -> Result<()> {
     let key = MainKey::from_str("AABB09182736CCDD")?.shift_scheme(ShiftSchemes::PC1)?;
-    assert_eq!(key.to_hex_string(), "C3C033A33F0CFA");
+    assert_eq!(key, MainKey::from_str("C3C033A33F0CFA")?);
     Ok(())
 }
 
 #[test]
 fn test_round_key() -> Result<()> {
-    let key = MainKey::from_str("AABB09182736CCDD").and_then(|key| key.get_round_key(1))?;
-    let should_be = MainKey::from_str("194CD072DE8C")?; // FIXME?
-    assert_eq!(key.to_hex_string(), should_be.to_hex_string());
+    let key = MainKey::from_str("AABB09182736CCDD")
+        .and_then(|key| key.get_round_key(1, ShiftDirection::Left))?;
+    assert_eq!(key, MainKey::from_str("194CD072DE8C")?);
 
-    let key = MainKey::from_str("AABB09182736CCDD").and_then(|key| key.get_round_key(16))?;
-    let should_be = MainKey::from_str("181C5D75C66D")?;
-    assert_eq!(key.to_hex_string(), should_be.to_hex_string());
+    let key = MainKey::from_str("AABB09182736CCDD")
+        .and_then(|key| key.get_round_key(16, ShiftDirection::Left))?;
+    assert_eq!(key, MainKey::from_str("181C5D75C66D")?);
     Ok(())
 }

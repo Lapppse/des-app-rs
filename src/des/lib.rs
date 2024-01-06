@@ -4,6 +4,6 @@ pub mod shift;
 
 pub use error::Error;
 pub use main_key::MainKey;
-pub use shift::ShiftSchemes;
+pub use shift::{ShiftDirection, ShiftSchemes};
 
 pub type Result<T> = std::result::Result<T, Error>;

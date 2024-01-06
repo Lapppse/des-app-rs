@@ -1,5 +1,30 @@
+use super::{Error, Result};
+
+#[derive(Debug, Clone, Copy, PartialEq, PartialOrd)]
+pub enum ShiftDirection {
+    Left,
+    Right,
+}
+
+impl ShiftDirection {
+    pub fn get_round_shift(&self, round: u8) -> Result<u8> {
+        let round = match self {
+            Self::Left => round,
+            Self::Right => 16 - round + 1,
+        };
+        let round_shift = round * 2;
+        match round {
+            1 => Ok(round_shift - 1),
+            (2..=8) => Ok(round_shift - 2),
+            (9..=15) => Ok(round_shift - 3),
+            16 => Ok(round_shift - 4),
+            _ => Err(Error::InvalidRound(round)),
+        }
+    }
+}
+
 // FIXME: move to struct?
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq, PartialOrd)]
 pub enum ShiftSchemes {
     PC1,
     PC2,
@@ -21,5 +46,30 @@ impl ShiftSchemes {
             ]
             .as_slice(),
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_round_offset() -> Result<()> {
+        let mut round = 1;
+        let mut result = ShiftDirection::Left.get_round_shift(round)?;
+        assert_eq!(result, 1);
+
+        round = 2;
+        result = ShiftDirection::Left.get_round_shift(round)?;
+        assert_eq!(result, 2);
+
+        round = 9;
+        result = ShiftDirection::Left.get_round_shift(round)?;
+        assert_eq!(result, 15);
+
+        round = 16;
+        result = ShiftDirection::Left.get_round_shift(round)?;
+        assert_eq!(result, 28);
+        Ok(())
     }
 }
