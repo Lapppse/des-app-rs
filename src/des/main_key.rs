@@ -25,23 +25,11 @@ impl fmt::Display for MainKey {
 impl FromStr for MainKey {
     type Err = super::Error;
 
-    /// Accepts both binary and hex strings
+    /// Converts from binary str
     fn from_str(s: &str) -> Result<Self> {
         let mut key = BitVec::new();
-        if s.to_lowercase().contains(['a', 'b', 'c', 'd', 'e', 'f']) {
-            let key_num =
-                u64::from_str_radix(s, 16).map_err(|_| Error::StringParseError(s.to_string()))?;
-            let s = format!("{key_num:0>width$b}", width = s.len() * 4);
-
-            // FIXME: repetitive code
-            for ch in s.as_str().chars() {
-                key.push(ch != '0');
-            }
-            return Ok(Self { key });
-        }
-
         for ch in s.chars() {
-            key.push(ch != '0');
+            key.push(ch == '1');
         }
         Ok(Self { key })
     }
@@ -56,10 +44,18 @@ impl MainKey {
         self.key.clone()
     }
 
-    pub fn as_bitvec(&self) -> BitVec {
+    /// returns inner BitVec while consuming Self
+    pub fn into_bitvec(&self) -> BitVec {
         let result = self.key.to_owned();
         let _ = self;
         result
+    }
+
+    pub fn from_hex_str(s: &str) -> Result<Self> {
+        let key_num =
+            u64::from_str_radix(s, 16).map_err(|_| Error::StringParseError(s.to_string()))?;
+        let s = format!("{key_num:0>width$b}", width = s.len() * 4);
+        Self::from_str(s.as_str())
     }
 
     /// Returns uppercase hex string
@@ -77,7 +73,7 @@ impl MainKey {
                 got: self.key.len(),
             });
         }
-        let key = scheme.shift(self.as_bitvec())?;
+        let key = scheme.shift(self.into_bitvec())?;
         Ok(Self::new(key))
     }
 

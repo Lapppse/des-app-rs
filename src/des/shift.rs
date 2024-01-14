@@ -148,11 +148,12 @@ impl ShiftSchemes {
         .as_slice()
     }
 
+    // FIXME: check len
     // FIXME: inefficient
     pub fn shift<T>(&self, items: T) -> Result<T>
     where
         T: IntoIterator + FromIterator<T::Item> + Clone + Index<usize, Output = T::Item>,
-        T::Item: Default + Copy + Clone,
+        T::Item: Copy,
     {
         let scheme = self.as_slice();
         let mut result: Vec<T::Item> = Vec::with_capacity(scheme.len());
