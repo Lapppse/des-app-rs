@@ -6,6 +6,8 @@ pub enum Error {
     InvalidRound(u8),
     #[error("couldn't convert string {0} to main key (is it hex with length 16?)")]
     StringParseError(String),
-    #[error("expected bitvec to be 64 bits long, but provided bitvec was of length {0}")]
-    InvalidKeyLength(usize),
+    #[error(
+        "expected iterable to be at least/exactly {expected} bits long, but provided iterable was of length {got}" // FIXME: at least/exactly
+    )]
+    InvalidIterableLength { expected: usize, got: usize },
 }

@@ -5,7 +5,9 @@ use std::str::FromStr;
 
 #[derive(Debug, Clone, PartialEq, PartialOrd)]
 pub struct MainKey {
-    pub key: BitVec<u8>, // FIXME: pub or not?
+    // FIXME: pub or not?
+    // TODO: MainKey as_slice and as_bitvec and len
+    key: BitVec,
 }
 
 impl fmt::Display for MainKey {
@@ -46,39 +48,42 @@ impl FromStr for MainKey {
 }
 
 impl MainKey {
-    pub fn new(key: BitVec<u8>) -> Self {
+    pub fn new(key: BitVec) -> Self {
         Self { key }
+    }
+
+    pub fn to_bitvec(&self) -> BitVec {
+        self.key.clone()
+    }
+
+    pub fn as_bitvec(&self) -> BitVec {
+        let result = self.key.to_owned();
+        let _ = self;
+        result
     }
 
     /// Returns uppercase hex string
     pub fn to_hex_string(&self) -> String {
         let result = u64::from_str_radix(self.to_string().as_str(), 2).unwrap(); // FIXME:
-        format!("{:X}", result)
-    }
-
-    /// Combines shifting by PC1, round shifting and shifting by PC2
-    /// Should be preferred against using 3 functions separately
-    pub fn get_round_key(&self, round: u8, direction: ShiftDirection) -> Result<Self> {
-        self.shift_scheme(ShiftSchemes::PC1)
-            .and_then(|key| key.shift_round(round, direction))
-            .and_then(|key| key.shift_scheme(ShiftSchemes::PC2))
+        format!("{:0>width$X}", result, width = self.key.len() / 4)
     }
 
     /// Returns new key with bits shifted according to given scheme. Trims the key if the scheme is shorter
     pub fn shift_scheme(&self, scheme: ShiftSchemes) -> Result<Self> {
-        let scheme = scheme.as_slice();
-        if self.key.len() < scheme.len() {
-            return Err(Error::InvalidKeyLength(self.key.len()));
+        let needed_len = scheme.as_slice().len();
+        if self.key.len() < needed_len {
+            return Err(Error::InvalidIterableLength {
+                expected: needed_len,
+                got: self.key.len(),
+            });
         }
-        let mut new_key: BitVec<u8> = BitVec::with_capacity(scheme.len());
-        for i in scheme.iter() {
-            new_key.push(self.key[*i]);
-        }
-        Ok(Self::new(new_key))
+        let key = scheme.shift(self.as_bitvec())?;
+        Ok(Self::new(key))
     }
 
     /// Returns new round shifted key (doesn't mutate self). Round should be 1..=16
     pub fn shift_round(&self, round: u8, direction: ShiftDirection) -> Result<Self> {
+        // FIXME: repetitive code if round is in bounds
         if !(1..=16).contains(&round) {
             return Err(Error::InvalidRound(round));
         }
@@ -94,5 +99,13 @@ impl MainKey {
         left.extend(right);
 
         Ok(Self::new(left))
+    }
+
+    /// Combines shifting by PC1, round shifting and shifting by PC2
+    /// Should be preferred against using 3 functions separately
+    pub fn get_round_key(&self, round: u8, direction: ShiftDirection) -> Result<Self> {
+        self.shift_scheme(ShiftSchemes::PC1) // FIXME: use standartized Shiftschemes::shift
+            .and_then(|key| key.shift_round(round, direction))
+            .and_then(|key| key.shift_scheme(ShiftSchemes::PC2))
     }
 }
