@@ -1,0 +1,275 @@
+[1mdiff --git a/src/des/block.rs b/src/des/block.rs[m
+[1mindex 1d2e505..20006f7 100644[m
+[1m--- a/src/des/block.rs[m
+[1m+++ b/src/des/block.rs[m
+[36m@@ -1,14 +1,14 @@[m
+ use bitvec::prelude::*;[m
+ use itertools::Itertools;[m
+[31m-use std::fmt;[m
+ use std::mem::swap;[m
+ use std::str::FromStr;[m
+ [m
+ use super::{Error, MainKey, Result, ShiftDirection, ShiftSchemes};[m
+[32m+[m[32muse std::fmt;[m
+ [m
+ #[derive(Debug, Clone, PartialEq, PartialOrd)][m
+ pub struct Block {[m
+[31m-    data: BitVec,[m
+[32m+[m[32m    data: BitVec, // TODO: add field encoded?[m
+ }[m
+ [m
+ impl fmt::Display for Block {[m
+[36m@@ -48,6 +48,8 @@[m [mimpl Block {[m
+         Ok(Self { data })[m
+     }[m
+ [m
+[32m+[m[32m    /// Returns copy of inner BitVec[m
+[32m+[m[32m    // FIXME: blanket impls and adequate --naming-- structure[m
+     pub fn to_bitvec(&self) -> BitVec {[m
+         self.data.clone()[m
+     }[m
+[36m@@ -84,60 +86,110 @@[m [mimpl Block {[m
+         Self::new(data)[m
+     }[m
+ [m
+[31m-    pub fn encode(&self, key: MainKey) -> Result<Self> {[m
+[31m-        // let data = ShiftSchemes::IP.shift(self.as_bitvec())?;[m
+[31m-        let data = self.shift_scheme(ShiftSchemes::IP)?.into_bitvec();[m
+[31m-        let (left, right) = data.split_at(data.len() / 2);[m
+[31m-        let mut left = left.to_bitvec();[m
+[31m-        let mut right = right.to_bitvec();[m
+[32m+[m[32m    pub fn encode(&self, key: &MainKey) -> Result<Self> {[m
+[32m+[m[32m        let data = ShiftSchemes::IP.shift(self.into_bitvec())?;[m
+[32m+[m[32m        let (left, right) = data.split_at(32);[m
+[32m+[m[32m        let mut left = left.to_owned();[m
+[32m+[m[32m        let mut right = right.to_owned();[m
+         for round in 1..=16 {[m
+[31m-            swap(&mut left, &mut right);[m
+[31m-            right ^= self.f([m
+[31m-                left.clone(),[m
+[32m+[m[32m            left ^= self.f([m
+[32m+[m[32m                right.clone(),[m
+                 &key.get_round_key(round, ShiftDirection::Left)?,[m
+             )?;[m
+[32m+[m[32m            swap(&mut left, &mut right);[m
+         }[m
+[31m-        swap(&mut left, &mut right);[m
+[31m-        left.extend(right);[m
+[31m-        // let data = ShiftSchemes::IP1.shift(data)?;[m
+[31m-        self.shift_scheme(ShiftSchemes::IP1)[m
+[31m-        // Ok(Self { data })[m
+[32m+[m[32m        right.extend(left);[m
+[32m+[m[32m        Self::new(ShiftSchemes::IP1.shift(right)?)[m
+[32m+[m[32m    }[m
+[32m+[m
+[32m+[m[32m    pub fn decode(&self, key: &MainKey) -> Result<Self> {[m
+[32m+[m[32m        let data = ShiftSchemes::IP.shift(self.into_bitvec())?;[m
+[32m+[m[32m        let (left, right) = data.split_at(32);[m
+[32m+[m[32m        let mut left = left.to_owned();[m
+[32m+[m[32m        let mut right = right.to_owned();[m
+[32m+[m
+[32m+[m[32m        for round in 1..=16 {[m
+[32m+[m[32m            left ^= self.f([m
+[32m+[m[32m                right.clone(),[m
+[32m+[m[32m                &key.get_round_key(round, ShiftDirection::Right)?,[m
+[32m+[m[32m            )?;[m
+[32m+[m[32m            swap(&mut left, &mut right);[m
+[32m+[m[32m        }[m
+[32m+[m[32m        right.extend(left);[m
+[32m+[m[32m        Self::new(ShiftSchemes::IP1.shift(right)?)[m
+     }[m
+ [m
+     fn f(&self, right: BitVec, key: &MainKey) -> Result<BitVec> {[m
+[31m-        let key = key.to_bitvec();[m
+[32m+[m[32m        let key = key.into_bitvec();[m
+         let right = ShiftSchemes::E.shift(right)? ^ key;[m
+ [m
+         let blocks = right.chunks(6).map(|it| it.to_owned());[m
+         let schemes = ShiftSchemes::get_s_schemes();[m
+         let right = blocks[m
+             .zip(schemes)[m
+[31m-            .map(|(block, scheme)| {[m
+[31m-                let scheme = scheme.as_slice();[m
+[31m-                let pos = Self::block_to_pos(block);[m
+[31m-                let block: BitVec<usize, bitvec::order::LocalBits> =[m
+[31m-                    BitVec::from_element(scheme[pos as usize]);[m
+[31m-                block[m
+[31m-            })[m
+[32m+[m[32m            .map(|(block, scheme)| Self::block_s_scheme_shift(block, *scheme))[m
+             .concat();[m
+ [m
+         ShiftSchemes::P.shift(right)[m
+     }[m
+ [m
+[32m+[m[32m    fn block_s_scheme_shift(block: BitVec, s_scheme: ShiftSchemes) -> BitVec {[m
+[32m+[m[32m        let scheme = s_scheme.as_slice();[m
+[32m+[m[32m        let pos = Self::block_to_pos(block) as usize;[m
+[32m+[m[32m        let block = BitVec::from_element(scheme[pos]);[m
+[32m+[m[32m        let (block, _) = block.split_at(4);[m
+[32m+[m[32m        let mut block = block.to_owned();[m
+[32m+[m[32m        block.reverse();[m
+[32m+[m[32m        block.to_owned()[m
+[32m+[m[32m    }[m
+[32m+[m
+     /// Returns block's value's position on ShiftSchemes::S(1-8) schemes[m
+     fn block_to_pos(block: BitVec) -> u8 {[m
+[31m-        let i_parts = [block[0], block[5]][m
+[31m-            .iter()[m
+[31m-            .map(|bit| bit.to_owned() as u16)[m
+[31m-            .reduce(|prev, cur| prev * 10 + cur)[m
+[31m-            .expect("What?"); // FIXME:[m
+[31m-        let j_parts = [block[1], block[2], block[3], block[4]][m
+[31m-            .iter()[m
+[31m-            .map(|bit| bit.to_owned() as u16)[m
+[31m-            .reduce(|prev, cur| prev * 10 + cur)[m
+[31m-            .expect("What?"); // FIXME:[m
+[31m-        let i_pos = u16::from_be(i_parts) as u8; // FIXME: from_be or from_str_radix?[m
+[31m-        let j_pos = u16::from_be(j_parts) as u8;[m
+[32m+[m[32m        let i_parts = [block[0], block[5]];[m
+[32m+[m[32m        let i_parts = i_parts.map(|it| (it as u8).to_string()).concat();[m
+[32m+[m[32m        let j_parts = [block[1], block[2], block[3], block[4]];[m
+[32m+[m[32m        let j_parts = j_parts.map(|it| (it as u8).to_string()).concat();[m
+[32m+[m[32m        let i_pos = u8::from_str_radix(&i_parts, 2)[m
+[32m+[m[32m            .map_err(|_| Error::StringParseError(i_parts))[m
+[32m+[m[32m            .unwrap(); // FIXME:[m
+[32m+[m[32m        let j_pos = u8::from_str_radix(&j_parts, 2)[m
+[32m+[m[32m            .map_err(|_| Error::StringParseError(j_parts))[m
+[32m+[m[32m            .unwrap(); // FIXME:[m
+         j_pos + i_pos * 16 // a row is 16 nums long hence i_pos * 16[m
+     }[m
+ }[m
+[32m+[m
+[32m+[m[32m#[cfg(test)][m
+[32m+[m[32mmod tests {[m
+[32m+[m[32m    use super::*;[m
+[32m+[m
+[32m+[m[32m    #[test][m
+[32m+[m[32m    fn test_block_to_pos() -> Result<()> {[m
+[32m+[m[32m        let scheme = ShiftSchemes::S1.as_slice();[m
+[32m+[m[32m        let block = BitVec::from(bits![usize, LocalBits; 1, 0, 0, 1, 0, 1]);[m
+[32m+[m[32m        let pos = Block::block_to_pos(block) as usize;[m
+[32m+[m[32m        let block = scheme[pos];[m
+[32m+[m[32m        assert_eq!(block, 8);[m
+[32m+[m
+[32m+[m[32m        let scheme = ShiftSchemes::S7.as_slice();[m
+[32m+[m[32m        let block = BitVec::from(bits![usize, LocalBits; 0, 1, 1, 0, 1, 1]);[m
+[32m+[m[32m        let pos = Block::block_to_pos(block) as usize;[m
+[32m+[m[32m        let block = scheme[pos];[m
+[32m+[m[32m        let block: BitVec<usize, LocalBits> = BitVec::from_element(block);[m
+[32m+[m[32m        let (block, _) = block.split_at(4);[m
+[32m+[m[32m        let should_be = BitVec::from(bits![usize, LocalBits; 1, 1, 1, 1]);[m
+[32m+[m[32m        assert_eq!(block, should_be);[m
+[32m+[m
+[32m+[m[32m        Ok(())[m
+[32m+[m[32m    }[m
+[32m+[m
+[32m+[m[32m    #[test][m
+[32m+[m[32m    fn test_block_s_shift() -> Result<()> {[m
+[32m+[m[32m        let scheme = ShiftSchemes::S3;[m
+[32m+[m[32m        let block = MainKey::from_str("110010")?.into_bitvec();[m
+[32m+[m[32m        let block = Block::block_s_scheme_shift(block, scheme);[m
+[32m+[m[32m        assert_eq!(block, MainKey::from_str("0001")?.into_bitvec());[m
+[32m+[m
+[32m+[m[32m        Ok(())[m
+[32m+[m[32m    }[m
+[32m+[m[32m}[m
+[1mdiff --git a/src/des/main_key.rs b/src/des/main_key.rs[m
+[1mindex ab595a8..81d291b 100644[m
+[1m--- a/src/des/main_key.rs[m
+[1m+++ b/src/des/main_key.rs[m
+[36m@@ -7,7 +7,7 @@[m [muse std::str::FromStr;[m
+ pub struct MainKey {[m
+     // FIXME: pub or not?[m
+     // TODO: MainKey as_slice and as_bitvec and len[m
+[31m-    key: BitVec,[m
+[32m+[m[32m    key: BitVec, // TODO: add round value[m
+ }[m
+ [m
+ impl fmt::Display for MainKey {[m
+[36m@@ -40,6 +40,7 @@[m [mimpl MainKey {[m
+         Self { key }[m
+     }[m
+ [m
+[32m+[m[32m    /// Returns copy of inner BitVec[m
+     pub fn to_bitvec(&self) -> BitVec {[m
+         self.key.clone()[m
+     }[m
+[36m@@ -87,7 +88,7 @@[m [mimpl MainKey {[m
+         let round_shift = direction.get_round_shift(round)? as usize;[m
+         let key = self.key.clone();[m
+         let (left, right) = key.split_at(key.len() / 2);[m
+[31m-        let mut left = left.to_owned().to_bitvec();[m
+[32m+[m[32m        let mut left = left.to_owned();[m
+         let mut right = right.to_owned();[m
+ [m
+         left.rotate_left(round_shift);[m
+[1mdiff --git a/src/des/shift.rs b/src/des/shift.rs[m
+[1mindex c80e03e..e17c19f 100644[m
+[1m--- a/src/des/shift.rs[m
+[1m+++ b/src/des/shift.rs[m
+[36m@@ -160,8 +160,7 @@[m [mimpl ShiftSchemes {[m
+         for pos in scheme {[m
+             result.push(items[*pos]);[m
+         }[m
+[31m-        let result = T::from_iter(result);[m
+[31m-        Ok(result)[m
+[32m+[m[32m        Ok(T::from_iter(result))[m
+     }[m
+ }[m
+ [m
+[1mdiff --git a/src/main.rs b/src/main.rs[m
+[1mindex 712ba65..93c38fa 100644[m
+[1m--- a/src/main.rs[m
+[1m+++ b/src/main.rs[m
+[36m@@ -1,11 +1,22 @@[m
+ use des::{Block, MainKey};[m
+[31m-use miette::{IntoDiagnostic, Result as m_result};[m
+[31m-use std::str::FromStr;[m
+[32m+[m[32muse miette::{IntoDiagnostic, Result as miette_result};[m
+[32m+[m[32muse std::io::stdin;[m
+ [m
+[31m-fn main() -> m_result<()> {[m
+[31m-    let plain_text = Block::from_str("8787878787878787").into_diagnostic()?;[m
+[31m-    let key = MainKey::from_str("0E329232EA6D0D73").into_diagnostic()?;[m
+[31m-    println!("{}", plain_text.encode(key).into_diagnostic()?);[m
+[32m+[m[32mfn get_input(text: &str) -> miette_result<String> {[m
+[32m+[m[32m    println!("{text}");[m
+[32m+[m[32m    let mut input = String::with_capacity(16);[m
+[32m+[m[32m    stdin().read_line(&mut input).into_diagnostic()?;[m
+[32m+[m[32m    let input = input.trim();[m
+[32m+[m[32m    Ok(input.to_owned())[m
+[32m+[m[32m}[m
+[32m+[m
+[32m+[m[32mfn main() -> miette_result<()> {[m
+[32m+[m[32m    let key =[m
+[32m+[m[32m        MainKey::from_hex_str(get_input("Input hex main key: ")?.as_str()).into_diagnostic()?;[m
+[32m+[m[32m    let plain_text =[m
+[32m+[m[32m        Block::from_hex_str(get_input("Input plain text")?.as_str()).into_diagnostic()?;[m
+[32m+[m[32m    let plain_text = plain_text.encode(&key).into_diagnostic()?;[m
+[32m+[m[32m    println!("Result: {}", plain_text.to_hex_string());[m
+ [m
+     Ok(())[m
+ }[m
+[1mdiff --git a/tests/block.rs b/tests/block.rs[m
+[1mindex 2e6e011..be7d651 100644[m
+[1m--- a/tests/block.rs[m
+[1m+++ b/tests/block.rs[m
+[36m@@ -56,6 +56,17 @@[m [mfn test_encode() -> Result<()> {[m
+     let plain_text = Block::from_hex_str("8787878787878787")?;[m
+     assert_eq!(plain_text.to_bitvec().len(), 64);[m
+     let key = MainKey::from_hex_str("0E329232EA6D0D73")?;[m
+[31m-    assert_eq!(plain_text.encode(key)?.to_hex_string(), "0000000000000000");[m
+[32m+[m[32m    assert_eq!(plain_text.encode(&key)?.to_hex_string(), "0000000000000000");[m
+[32m+[m[32m    Ok(())[m
+[32m+[m[32m}[m
+[32m+[m
+[32m+[m[32m#[test][m
+[32m+[m[32mfn test_decode() -> Result<()> {[m
+[32m+[m[32m    let cipher_text = Block::from_hex_str("0000000000000000")?;[m
+[32m+[m[32m    let key = MainKey::from_hex_str("0E329232EA6D0D73")?;[m
+[32m+[m[32m    assert_eq!([m
+[32m+[m[32m        cipher_text.decode(&key)?.to_hex_string(),[m
+[32m+[m[32m        "8787878787878787"[m
+[32m+[m[32m    );[m
+     Ok(())[m
+ }[m

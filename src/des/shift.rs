@@ -160,8 +160,7 @@ impl ShiftSchemes {
         for pos in scheme {
             result.push(items[*pos]);
         }
-        let result = T::from_iter(result);
-        Ok(result)
+        Ok(T::from_iter(result))
     }
 }
 

@@ -56,6 +56,17 @@ fn test_encode() -> Result<()> {
     let plain_text = Block::from_hex_str("8787878787878787")?;
     assert_eq!(plain_text.to_bitvec().len(), 64);
     let key = MainKey::from_hex_str("0E329232EA6D0D73")?;
-    assert_eq!(plain_text.encode(key)?.to_hex_string(), "0000000000000000");
+    assert_eq!(plain_text.encode(&key)?.to_hex_string(), "0000000000000000");
+    Ok(())
+}
+
+#[test]
+fn test_decode() -> Result<()> {
+    let cipher_text = Block::from_hex_str("0000000000000000")?;
+    let key = MainKey::from_hex_str("0E329232EA6D0D73")?;
+    assert_eq!(
+        cipher_text.decode(&key)?.to_hex_string(),
+        "8787878787878787"
+    );
     Ok(())
 }

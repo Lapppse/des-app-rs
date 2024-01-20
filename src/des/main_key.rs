@@ -7,7 +7,7 @@ use std::str::FromStr;
 pub struct MainKey {
     // FIXME: pub or not?
     // TODO: MainKey as_slice and as_bitvec and len
-    key: BitVec,
+    key: BitVec, // TODO: add round value
 }
 
 impl fmt::Display for MainKey {
@@ -40,6 +40,7 @@ impl MainKey {
         Self { key }
     }
 
+    /// Returns copy of inner BitVec
     pub fn to_bitvec(&self) -> BitVec {
         self.key.clone()
     }
@@ -87,7 +88,7 @@ impl MainKey {
         let round_shift = direction.get_round_shift(round)? as usize;
         let key = self.key.clone();
         let (left, right) = key.split_at(key.len() / 2);
-        let mut left = left.to_owned().to_bitvec();
+        let mut left = left.to_owned();
         let mut right = right.to_owned();
 
         left.rotate_left(round_shift);
