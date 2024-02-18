@@ -97,7 +97,7 @@ impl<Message> Component<Message> for KeyPage {
                 text(format!(
                     "Round: {} key: {}",
                     self.round,
-                    round_key.to_upper_hex()
+                    round_key.as_bitvec().to_upper_hex()
                 ))
                 .size(24),
             )

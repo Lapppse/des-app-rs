@@ -1,3 +1,5 @@
+#![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
+
 use iced::widget::{button, column, component, container, text};
 use iced::{
     alignment, executor, window, Alignment, Application, Command, Element, Length, Settings, Size,
