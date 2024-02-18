@@ -1,4 +1,4 @@
-use des::{Block, Error, FromHexStr, MainKey, ToUpperHex};
+use des_ndtp::{Block, Error, FromHexStr, MainKey, ToHexString};
 use iced::widget::{
     checkbox, column, component, container, horizontal_space, row, text, text_input, Component,
 };

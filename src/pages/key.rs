@@ -1,4 +1,4 @@
-use des::{Error, FromHexStr, MainKey, ShiftDirection, ToUpperHex};
+use des_ndtp::{Error, FromHexStr, MainKey, ShiftDirection, ToHexString};
 use iced::widget::{
     column, component, container, horizontal_space, row, slider, text, text_input, Component,
 };
