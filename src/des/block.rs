@@ -3,12 +3,15 @@ use itertools::Itertools;
 use std::mem::swap;
 use std::str::FromStr;
 
+use crate::traits::ToLowerHex;
+
+use super::traits::{FromHexStr, ToUpperHex};
 use super::{Error, MainKey, Result, ShiftDirection, ShiftSchemes};
 use std::fmt;
 
 #[derive(Debug, Clone, PartialEq, PartialOrd)]
 pub struct Block {
-    data: BitVec, // TODO: add field encoded?
+    data: BitVec,
 }
 
 impl fmt::Display for Block {
@@ -26,8 +29,15 @@ impl fmt::Display for Block {
 impl FromStr for Block {
     type Err = super::Error;
 
-    /// Converts from binary str
+    /// passed str should be 64 chars long
+    /// treats non-zero values as true
     fn from_str(s: &str) -> Result<Self> {
+        if s.len() != 64 {
+            return Err(Error::InvalidIterableLength {
+                expected: 64,
+                got: s.len(),
+            });
+        }
         let mut data = BitVec::new();
         for ch in s.chars() {
             data.push(ch == '1');
@@ -36,10 +46,40 @@ impl FromStr for Block {
     }
 }
 
+impl FromHexStr for Block {
+    /// passed str should be 16 hex chars long
+    fn from_hex_str(s: &str) -> Result<Self> {
+        if s.len() != 16 {
+            return Err(Error::InvalidIterableLength {
+                expected: 16,
+                got: s.len(),
+            });
+        }
+        let data_num =
+            u64::from_str_radix(s, 16).map_err(|_| Error::StringParseError(s.to_string()))?;
+        let s = format!("{data_num:0>64b}");
+        Self::from_str(s.as_str())
+    }
+}
+
+impl ToUpperHex for Block {
+    fn to_upper_hex(&self) -> String {
+        let result = u64::from_str_radix(self.to_string().as_str(), 2).unwrap();
+        format!("{:0>16X}", result)
+    }
+}
+
+impl ToLowerHex for Block {
+    fn to_lower_hex(&self) -> String {
+        let result = u64::from_str_radix(self.to_string().as_str(), 2).unwrap();
+        format!("{:0>16X}", result)
+    }
+}
+
 impl Block {
+    /// passed bitvec should contain 64 bits
     pub fn new(data: BitVec) -> Result<Self> {
         if data.len() != 64 {
-            // FIXME: Should I keep? The name would change
             return Err(Error::InvalidIterableLength {
                 expected: 64,
                 got: data.len(),
@@ -48,53 +88,26 @@ impl Block {
         Ok(Self { data })
     }
 
-    /// Returns copy of inner BitVec
-    // FIXME: blanket impls and adequate --naming-- structure
-    pub fn to_bitvec(&self) -> BitVec {
-        self.data.clone()
+    pub fn as_bitvec(&self) -> &BitVec {
+        &self.data
     }
 
-    /// returns inner BitVec while consuming Self
-    pub fn into_bitvec(&self) -> BitVec {
+    /// returns inner BitVec consuming Self
+    pub fn into_bitvec(self) -> BitVec {
         let result = self.data.to_owned();
-        let _ = self;
+        drop(self);
         result
     }
 
-    pub fn from_hex_str(s: &str) -> Result<Self> {
-        let data_num =
-            u64::from_str_radix(s, 16).map_err(|_| Error::StringParseError(s.to_string()))?;
-        let s = format!("{data_num:0>width$b}", width = s.len() * 4);
-        Self::from_str(s.as_str())
-    }
-
-    pub fn to_hex_string(&self) -> String {
-        let result = u64::from_str_radix(self.to_string().as_str(), 2).unwrap(); // FIXME: unwrap and blanket implementation
-        format!("{:0>16X}", result)
-    }
-
-    /// Returns new key with bits shifted according to given scheme. Trims the key if the scheme is shorter
-    pub fn shift_scheme(&self, scheme: ShiftSchemes) -> Result<Self> {
-        let needed_len = scheme.as_slice().len();
-        if self.data.len() < needed_len {
-            return Err(Error::InvalidIterableLength {
-                expected: needed_len,
-                got: self.data.len(),
-            });
-        }
-        let data = scheme.shift(self.into_bitvec())?;
-        Self::new(data)
-    }
-
     pub fn encode(&self, key: &MainKey) -> Result<Self> {
-        let data = ShiftSchemes::IP.shift(self.into_bitvec())?;
+        let data = ShiftSchemes::IP.shift(self.as_bitvec().to_owned())?;
         let (left, right) = data.split_at(32);
         let mut left = left.to_owned();
         let mut right = right.to_owned();
         for round in 1..=16 {
             left ^= self.f(
                 right.clone(),
-                &key.get_round_key(round, ShiftDirection::Left)?,
+                key.get_round_key(round, ShiftDirection::Left)?,
             )?;
             swap(&mut left, &mut right);
         }
@@ -103,7 +116,7 @@ impl Block {
     }
 
     pub fn decode(&self, key: &MainKey) -> Result<Self> {
-        let data = ShiftSchemes::IP.shift(self.into_bitvec())?;
+        let data = ShiftSchemes::IP.shift(self.as_bitvec().to_owned())?;
         let (left, right) = data.split_at(32);
         let mut left = left.to_owned();
         let mut right = right.to_owned();
@@ -111,7 +124,7 @@ impl Block {
         for round in 1..=16 {
             left ^= self.f(
                 right.clone(),
-                &key.get_round_key(round, ShiftDirection::Right)?,
+                key.get_round_key(round, ShiftDirection::Right)?,
             )?;
             swap(&mut left, &mut right);
         }
@@ -119,7 +132,7 @@ impl Block {
         Self::new(ShiftSchemes::IP1.shift(right)?)
     }
 
-    fn f(&self, right: BitVec, key: &MainKey) -> Result<BitVec> {
+    fn f(&self, right: BitVec, key: MainKey) -> Result<BitVec> {
         let key = key.into_bitvec();
         let right = ShiftSchemes::E.shift(right)? ^ key;
 
@@ -143,7 +156,7 @@ impl Block {
         block.to_owned()
     }
 
-    /// Returns block's value's position on ShiftSchemes::S(1-8) schemes
+    /// returns block's value's position on ShiftSchemes::S(1-8) schemes
     fn block_to_pos(block: BitVec) -> u8 {
         let i_parts = [block[0], block[5]];
         let i_parts = i_parts.map(|it| (it as u8).to_string()).concat();
@@ -151,10 +164,10 @@ impl Block {
         let j_parts = j_parts.map(|it| (it as u8).to_string()).concat();
         let i_pos = u8::from_str_radix(&i_parts, 2)
             .map_err(|_| Error::StringParseError(i_parts))
-            .unwrap(); // FIXME:
+            .unwrap();
         let j_pos = u8::from_str_radix(&j_parts, 2)
             .map_err(|_| Error::StringParseError(j_parts))
-            .unwrap(); // FIXME:
+            .unwrap();
         j_pos + i_pos * 16 // a row is 16 nums long hence i_pos * 16
     }
 }

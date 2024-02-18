@@ -1,5 +1,5 @@
 use bitvec::prelude::*;
-use des::{MainKey, Result, ShiftDirection, ShiftSchemes};
+use des::{FromHexStr, MainKey, Result, ShiftDirection, ToUpperHex};
 use std::str::FromStr;
 
 #[test]
@@ -58,42 +58,33 @@ fn test_to_hex_string() -> Result<()> {
     let key = MainKey::new(BitVec::from(
         bits![usize, bitvec::order::LocalBits; 1, 1, 0, 0, 0, 0, 1, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 0, 0, 1, 1, 1, 0, 1, 0, 0, 0,1, 1, 0, 0, 1, 1, 1, 1, 1, 1, 0, 0, 0, 0, 1, 1, 0, 0, 1, 1, 1, 1, 1, 0, 1, 0],
     ));
-    assert_eq!(key.to_hex_string(), "C3C033A33F0CFA");
+    assert_eq!(key.to_upper_hex(), "00C3C033A33F0CFA");
 
     let key = MainKey::new(BitVec::from(
         bits![usize, bitvec::order::LocalBits; 0, 0, 0, 0, 1, 1, 1, 1, 0, 0, 1, 1, 1, 1, 0, 0, 1, 0, 1, 0, 0, 1, 0, 1, 1, 0, 0, 1, 1, 1, 0, 1, 0, 1, 0, 1, 0, 0, 0, 1, 0, 0, 1, 0, 1, 1, 0, 0, 1, 0, 1, 0, 0, 1, 0, 1, 1, 1, 0, 0, 0, 1, 1, 0],
     ));
-    assert_eq!(key.to_hex_string(), "0F3CA59D512CA5C6");
+    assert_eq!(key.to_upper_hex(), "0F3CA59D512CA5C6");
 
     let key = MainKey::new(BitVec::from(
         bits![usize, bitvec::order::LocalBits; 1, 0, 0, 0, 0, 1, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 0, 0, 1, 1, 1, 0, 1, 0, 0, 0, 1, 1, 0, 0, 1, 1, 1, 1, 1, 1, 0, 0, 0, 0, 1, 1, 0, 0, 1, 1, 1, 1, 1, 0, 1, 0, 1],
     ));
-    assert_eq!(key.to_hex_string(), "878067467E19F5");
+    assert_eq!(key.into_bitvec().to_upper_hex(), "878067467E19F5");
     Ok(())
 }
 
 #[test]
 fn test_round_shift() -> Result<()> {
-    let key = MainKey::from_hex_str("AABB09182736CCDD")
-        .and_then(|key| key.shift_scheme(ShiftSchemes::PC1))?;
-    let left_shift = key.clone().shift_round(1, ShiftDirection::Left)?;
-    let right_shift = key.clone().shift_round(16, ShiftDirection::Right)?;
-    assert_eq!(left_shift, MainKey::from_hex_str("878067567E19F4")?);
+    let key = MainKey::from_hex_str("AABB09182736CCDD")?;
+    let left_shift = key.get_round_key(1, ShiftDirection::Left)?;
+    let right_shift = key.get_round_key(16, ShiftDirection::Right)?;
+    assert_eq!(left_shift, MainKey::from_hex_str("194CD072DE8C")?);
     assert_eq!(left_shift, right_shift);
 
-    let key = MainKey::from_hex_str("AABB09182736CCDD")
-        .and_then(|key| key.shift_scheme(ShiftSchemes::PC1))?;
-    let left_shift = key.clone().shift_round(16, ShiftDirection::Left)?;
-    let right_shift = key.clone().shift_round(1, ShiftDirection::Right)?;
-    assert_eq!(left_shift, MainKey::from_hex_str("C3C033A33F0CFA")?);
+    let key = MainKey::from_hex_str("AABB09182736CCDD")?;
+    let left_shift = key.get_round_key(16, ShiftDirection::Left)?;
+    let right_shift = key.get_round_key(1, ShiftDirection::Right)?;
+    assert_eq!(left_shift, MainKey::from_hex_str("181C5D75C66D")?);
     assert_eq!(left_shift, right_shift);
-    Ok(())
-}
-
-#[test]
-fn test_pc1_shift() -> Result<()> {
-    let key = MainKey::from_hex_str("AABB09182736CCDD")?.shift_scheme(ShiftSchemes::PC1)?;
-    assert_eq!(key, MainKey::from_hex_str("C3C033A33F0CFA")?);
     Ok(())
 }
 

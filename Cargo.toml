@@ -3,22 +3,20 @@ name = "des-app-rs"
 version = "0.1.0"
 edition = "2021"
 
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
-
 [[bin]]
 name="app"
 path="src/main.rs"
 
 [lib]
 name="des"
-path="src/des/lib.rs"  # FIXME:
+path="src/des/lib.rs"
 
 [dependencies]
 bitvec = { git = "https://github.com/ferrilab/bitvec" }
 criterion = "0.5.1"
-iced = { git = "https://github.com/iced-rs/iced.git", rev = "refs/tags/text-editor", features = ["debug", "tokio", "wgpu"] }
+iced = { git = "https://github.com/iced-rs/iced.git", features = ["debug", "tokio", "wgpu", "lazy"] }
 itertools = "0.12.0"
-miette = { version = "5.10.0", features = ["fancy"] }
+miette = { version = "7.0.0", features = ["fancy"] }
 nom = "7.1.3"
 rayon = "1.8.0"
 serde = "1.0.193"

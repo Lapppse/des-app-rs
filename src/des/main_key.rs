@@ -1,3 +1,4 @@
+use super::traits::{FromHexStr, ToLowerHex, ToUpperHex};
 use super::{Error, Result, ShiftDirection, ShiftSchemes};
 use bitvec::prelude::*;
 use std::fmt;
@@ -5,9 +6,7 @@ use std::str::FromStr;
 
 #[derive(Debug, Clone, PartialEq, PartialOrd)]
 pub struct MainKey {
-    // FIXME: pub or not?
-    // TODO: MainKey as_slice and as_bitvec and len
-    key: BitVec, // TODO: add round value
+    key: BitVec,
 }
 
 impl fmt::Display for MainKey {
@@ -25,13 +24,54 @@ impl fmt::Display for MainKey {
 impl FromStr for MainKey {
     type Err = super::Error;
 
-    /// Converts from binary str
+    /// treats non-zero values as true
     fn from_str(s: &str) -> Result<Self> {
         let mut key = BitVec::new();
         for ch in s.chars() {
             key.push(ch == '1');
         }
-        Ok(Self { key })
+        Ok(Self::new(key))
+    }
+}
+
+impl FromHexStr for MainKey {
+    fn from_hex_str(s: &str) -> Result<Self> {
+        let key_num =
+            u64::from_str_radix(s, 16).map_err(|_| Error::StringParseError(s.to_string()))?;
+        let s = format!("{key_num:0>width$b}", width = s.len() * 4);
+        Self::from_str(s.as_str())
+    }
+}
+
+impl ToUpperHex for MainKey {
+    /// returns zero-padded uppercase hex string
+    /// if you want to have unpadded hex string, consider converting into bitvec and calling this method on the result
+    fn to_upper_hex(&self) -> String {
+        let converted = self.key.to_upper_hex();
+        if converted.len() % 16 == 0 {
+            return converted;
+        }
+        format!(
+            "{:0>width$}",
+            converted,
+            width = converted.len() + (16 - converted.len() % 16)
+        )
+    }
+}
+
+impl ToLowerHex for MainKey {
+    /// returns zero-padded uppercase hex string
+    /// if you want to have unpadded hex string, consider converting into bitvec and calling this method on the result
+    fn to_lower_hex(&self) -> String {
+        let converted = self.key.to_lower_hex();
+        if converted.len() % 16 == 0 {
+            return converted;
+        }
+        format!(
+            "{:0>width$}",
+            converted,
+            width = converted.len() + (16 - converted.len() % 16)
+        )
     }
 }
 
@@ -40,33 +80,18 @@ impl MainKey {
         Self { key }
     }
 
-    /// Returns copy of inner BitVec
-    pub fn to_bitvec(&self) -> BitVec {
-        self.key.clone()
+    pub fn as_bitvec(&self) -> &BitVec {
+        &self.key
     }
 
-    /// returns inner BitVec while consuming Self
-    pub fn into_bitvec(&self) -> BitVec {
+    /// returns inner BitVec consuming Self
+    pub fn into_bitvec(self) -> BitVec {
         let result = self.key.to_owned();
-        let _ = self;
+        drop(self);
         result
     }
 
-    pub fn from_hex_str(s: &str) -> Result<Self> {
-        let key_num =
-            u64::from_str_radix(s, 16).map_err(|_| Error::StringParseError(s.to_string()))?;
-        let s = format!("{key_num:0>width$b}", width = s.len() * 4);
-        Self::from_str(s.as_str())
-    }
-
-    /// Returns uppercase hex string
-    pub fn to_hex_string(&self) -> String {
-        let result = u64::from_str_radix(self.to_string().as_str(), 2).unwrap(); // FIXME:
-        format!("{:0>width$X}", result, width = self.key.len() / 4)
-    }
-
-    /// Returns new key with bits shifted according to given scheme. Trims the key if the scheme is shorter
-    pub fn shift_scheme(&self, scheme: ShiftSchemes) -> Result<Self> {
+    fn shift_scheme(&mut self, scheme: ShiftSchemes) -> Result<()> {
         let needed_len = scheme.as_slice().len();
         if self.key.len() < needed_len {
             return Err(Error::InvalidIterableLength {
@@ -74,20 +99,15 @@ impl MainKey {
                 got: self.key.len(),
             });
         }
-        let key = scheme.shift(self.into_bitvec())?;
-        Ok(Self::new(key))
+
+        self.key = scheme.shift(self.key.clone())?;
+        Ok(())
     }
 
-    /// Returns new round shifted key (doesn't mutate self). Round should be 1..=16
-    pub fn shift_round(&self, round: u8, direction: ShiftDirection) -> Result<Self> {
-        // FIXME: repetitive code if round is in bounds
-        if !(1..=16).contains(&round) {
-            return Err(Error::InvalidRound(round));
-        }
-
+    /// returns new round shifted key (doesn't mutate self). u8 should be 1..=16
+    fn shift_round(&mut self, round: u8, direction: ShiftDirection) -> Result<()> {
         let round_shift = direction.get_round_shift(round)? as usize;
-        let key = self.key.clone();
-        let (left, right) = key.split_at(key.len() / 2);
+        let (left, right) = self.key.split_at(self.key.len() / 2);
         let mut left = left.to_owned();
         let mut right = right.to_owned();
 
@@ -95,14 +115,29 @@ impl MainKey {
         right.rotate_left(round_shift);
         left.extend(right);
 
-        Ok(Self::new(left))
+        self.key = left;
+        Ok(())
     }
 
-    /// Combines shifting by PC1, round shifting and shifting by PC2
-    /// Should be preferred against using 3 functions separately
+    /// returns new instance of MainKey
     pub fn get_round_key(&self, round: u8, direction: ShiftDirection) -> Result<Self> {
-        self.shift_scheme(ShiftSchemes::PC1) // FIXME: use standartized Shiftschemes::shift
-            .and_then(|key| key.shift_round(round, direction))
-            .and_then(|key| key.shift_scheme(ShiftSchemes::PC2))
+        let mut new_key = self.clone();
+        new_key.shift_scheme(ShiftSchemes::PC1)?;
+        new_key.shift_round(round, direction)?;
+        new_key.shift_scheme(ShiftSchemes::PC2)?;
+        Ok(new_key)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_pc1_shift() -> Result<()> {
+        let mut key = MainKey::from_hex_str("AABB09182736CCDD")?;
+        key.shift_scheme(ShiftSchemes::PC1)?;
+        assert_eq!(key, MainKey::from_hex_str("C3C033A33F0CFA")?);
+        Ok(())
     }
 }

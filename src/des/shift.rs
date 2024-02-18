@@ -24,9 +24,6 @@ impl ShiftDirection {
     }
 }
 
-// FIXME: move to struct?
-// TODO: shiftable trait?
-// TODO: Self::shift?
 #[derive(Debug, Clone, Copy, PartialEq, PartialOrd)]
 pub enum ShiftSchemes {
     PC1,
@@ -148,8 +145,6 @@ impl ShiftSchemes {
         .as_slice()
     }
 
-    // FIXME: check len
-    // FIXME: inefficient
     pub fn shift<T>(&self, items: T) -> Result<T>
     where
         T: IntoIterator + FromIterator<T::Item> + Clone + Index<usize, Output = T::Item>,
