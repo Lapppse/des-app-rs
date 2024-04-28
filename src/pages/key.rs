@@ -1,7 +1,5 @@
 use des_ndtp::{Error, FromHexStr, MainKey, ShiftDirection, ToHexString};
-use iced::widget::{
-    column, component, container, horizontal_space, row, slider, text, text_input, Component,
-};
+use iced::widget::{column, component, container, row, slider, text, text_input, Component, Space};
 use iced::{Alignment, Element, Length};
 
 #[derive(Debug, Clone)]
@@ -68,7 +66,7 @@ impl<Message> Component<Message> for KeyPage {
 
     fn view(&self, _state: &Self::State) -> Element<'_, Self::Event, iced::Theme, iced::Renderer> {
         let inputs = row![
-            horizontal_space(Length::FillPortion(1)),
+            Space::with_width(Length::FillPortion(1)),
             container(
                 column![
                     text_input("Input Main Key", &self.key_input)
@@ -82,7 +80,7 @@ impl<Message> Component<Message> for KeyPage {
                 .spacing(10),
             )
             .width(Length::FillPortion(6)),
-            horizontal_space(Length::FillPortion(1))
+            Space::with_width(Length::FillPortion(1))
         ];
 
         let mut outputs = column![].spacing(10);

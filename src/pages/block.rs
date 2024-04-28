@@ -1,6 +1,6 @@
 use des_ndtp::{Block, Error, FromHexStr, MainKey, ToHexString};
 use iced::widget::{
-    checkbox, column, component, container, horizontal_space, row, text, text_input, Component,
+    checkbox, column, component, container, row, text, text_input, Component, Space,
 };
 use iced::{Alignment, Element, Length};
 
@@ -9,6 +9,7 @@ pub enum Event {
     KeyInput(String),
     BlockInput(String),
     EncodeToggled(bool),
+    Ignore(String),
 }
 
 #[derive(Debug, Clone, Default)]
@@ -65,6 +66,7 @@ impl<Message> Component<Message> for BlockPage {
                 }
             }
             Event::EncodeToggled(encode) => self.encode = encode,
+            Event::Ignore(_) => {}
         }
 
         if let (Some(key), Some(block)) = (&self.key, &self.block) {
@@ -79,7 +81,7 @@ impl<Message> Component<Message> for BlockPage {
 
     fn view(&self, _state: &Self::State) -> Element<'_, Self::Event, iced::Theme, iced::Renderer> {
         let inputs = row![
-            horizontal_space(Length::FillPortion(1)),
+            Space::with_width(Length::FillPortion(1)),
             container(
                 column![
                     text_input("Input Main Key", &self.key_input)
@@ -89,9 +91,10 @@ impl<Message> Component<Message> for BlockPage {
                         .on_input(Event::BlockInput)
                         .size(24),
                     container(
-                        checkbox(String::from("Encode"), self.encode, Event::EncodeToggled)
+                        checkbox(String::from("Encode"), self.encode)
                             .size(30)
                             .text_size(24)
+                            .on_toggle(Event::EncodeToggled)
                     )
                     .padding(20)
                 ]
@@ -99,7 +102,7 @@ impl<Message> Component<Message> for BlockPage {
                 .spacing(10),
             )
             .width(Length::FillPortion(6)),
-            horizontal_space(Length::FillPortion(1))
+            Space::with_width(Length::FillPortion(1))
         ];
 
         let mut outputs = column![].spacing(10);
@@ -120,9 +123,20 @@ impl<Message> Component<Message> for BlockPage {
                 true => "Cipher",
                 false => "Plain",
             };
-            outputs = outputs
-                .push(text(format!("{} text: {}", mode, encoded_block.to_upper_hex())).size(24));
+            outputs = outputs.push(
+                text_input(
+                    &encoded_block.to_upper_hex(),
+                    &format!("{} text: {}", mode, encoded_block.to_upper_hex()),
+                )
+                .on_input(Event::Ignore)
+                .size(24),
+            );
         }
+        let outputs = row![
+            Space::with_width(Length::FillPortion(1)),
+            container(outputs).width(Length::FillPortion(6)),
+            Space::with_width(Length::FillPortion(1))
+        ];
 
         let content = column![inputs, outputs]
             .align_items(Alignment::Center)
