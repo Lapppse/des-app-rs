@@ -21,6 +21,7 @@ pub struct BlockPage {
     block_input: String,
     encode: bool,
     error: (Option<Error>, Option<Error>),
+    encode_time: Option<time::Duration>,
 }
 
 impl<Message> Component<Message> for BlockPage {
@@ -28,6 +29,7 @@ impl<Message> Component<Message> for BlockPage {
     type Event = Event;
 
     fn update(&mut self, _state: &mut Self::State, event: Self::Event) -> Option<Message> {
+        let (old_block, old_key, old_encode) = (self.block.clone(), self.key.clone(), self.encode);
         match event {
             Event::BlockInput(input) => {
                 if input.len() <= 16 {
@@ -69,11 +71,23 @@ impl<Message> Component<Message> for BlockPage {
             Event::Ignore(_) => {}
         }
 
+        // can't chain if let and usual if in rust 1.76.0
+        if old_block == self.block && old_key == self.key && old_encode == self.encode {
+            return None;
+        }
         if let (Some(key), Some(block)) = (&self.key, &self.block) {
+            let start: time::OffsetDateTime;
+            let end: time::OffsetDateTime;
             if self.encode {
+                start = time::OffsetDateTime::now_utc();
                 self.encoded_block = Some(block.encode(key).unwrap());
+                end = time::OffsetDateTime::now_utc();
+                self.encode_time = Some(end - start);
             } else {
+                start = time::OffsetDateTime::now_utc();
                 self.encoded_block = Some(block.decode(key).unwrap());
+                end = time::OffsetDateTime::now_utc();
+                self.encode_time = Some(end - start);
             }
         }
         None
@@ -87,7 +101,7 @@ impl<Message> Component<Message> for BlockPage {
                     text_input("Input Main Key", &self.key_input)
                         .on_input(Event::KeyInput)
                         .size(24),
-                    text_input("Input plain text block", &self.block_input)
+                    text_input("Input Text block", &self.block_input)
                         .on_input(Event::BlockInput)
                         .size(24),
                     container(
@@ -118,6 +132,10 @@ impl<Message> Component<Message> for BlockPage {
         if let Some(block) = &self.block {
             outputs = outputs.push(text(format!("Block: {}", block.to_upper_hex())).size(24))
         };
+        if let Some(time) = &self.encode_time {
+            outputs = outputs
+                .push(text(format!("Encrypted in {} µs", time.whole_microseconds())).size(20))
+        }
         if let Some(encoded_block) = &self.encoded_block {
             let mode = match &self.encode {
                 true => "Cipher",

@@ -12,4 +12,5 @@ des-ndtp = { git = "https://github.com/Lapppse/des-ndtp.git" }
 
 iced = { version = "0.12.1", features = ["debug", "tokio", "wgpu", "lazy"] }
 miette = { version = "7.0.0", features = ["fancy"] }
+time = "0.3.36"
 tokio = { version = "1.35.1", features = ["full"]}
