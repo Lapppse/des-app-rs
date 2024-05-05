@@ -71,7 +71,7 @@ impl<Message> Component<Message> for BlockPage {
             Event::Ignore(_) => {}
         }
 
-        // can't chain if let and usual if in rust 1.76.0
+        // can't chain if let and usual if in rust 1.78.0
         if old_block == self.block && old_key == self.key && old_encode == self.encode {
             return None;
         }
